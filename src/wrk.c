@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
         script_init(L, t, argc - optind, &argv[optind]);
 
         if (i == 0) {
-            cfg.pipeline = script_verify_request(t->L);
+            cfg.pipeline = script_verify_request(t->L, t->addr);
             cfg.dynamic  = !script_is_static(t->L);
             cfg.delay    = script_has_delay(t->L);
             if (script_want_response(t->L)) {
@@ -206,7 +206,7 @@ void *thread_main(void *arg) {
     size_t length = 0;
 
     if (!cfg.dynamic) {
-        script_request(thread->L, &request, &length);
+        script_request(thread->L, thread->addr, &request, &length);
     }
 
     thread->cs = zcalloc(thread->connections * sizeof(connection));
@@ -361,8 +361,19 @@ static int response_complete(http_parser *parser) {
 
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
+    struct addrinfo *addr = c->thread->addr;
+    char host[NI_MAXHOST];
+    char service[NI_MAXSERV];
 
-    switch (sock.connect(c, cfg.host)) {
+    flags = NI_NUMERICHOST | NI_NUMERICSERV;
+    int rc = getnameinfo(addr->ai_addr, addr->ai_addrlen, host, NI_MAXHOST, service, NI_MAXSERV, flags);
+    if (rc != 0) {
+        const char *msg = gai_strerror(rc);
+        fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
+        exit(1);
+    }
+
+    switch (sock.connect(c, host)) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
@@ -394,7 +405,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 
     if (!c->written) {
         if (cfg.dynamic) {
-            script_request(thread->L, &c->request, &c->length);
+            script_request(thread->L, thread->addr, &c->request, &c->length);
         }
         c->start   = time_us();
         c->pending = cfg.pipeline;

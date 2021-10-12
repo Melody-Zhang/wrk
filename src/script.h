@@ -17,9 +17,9 @@ void script_done(lua_State *, stats *, stats *);
 
 void script_init(lua_State *, thread *, int, char **);
 uint64_t script_delay(lua_State *);
-void script_request(lua_State *, char **, size_t *);
+void script_request(lua_State *, struct addrinfo *, char **, size_t *);
 void script_response(lua_State *, int, buffer *, buffer *);
-size_t script_verify_request(lua_State *L);
+size_t script_verify_request(lua_State *L, struct addrinfo *);
 
 bool script_is_static(lua_State *);
 bool script_want_response(lua_State *L);

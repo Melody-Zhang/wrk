@@ -47,12 +47,17 @@ function wrk.init(args)
    end
 end
 
-function wrk.format(method, path, headers, body)
+function wrk.format(host, method, path, headers, body)
+   local host    = host  or wrk.host
    local method  = method  or wrk.method
    local path    = path    or wrk.path
    local headers = headers or wrk.headers
    local body    = body    or wrk.body
    local s       = {}
+
+   if host then
+      wrk.headers["Host"] = host
+   end
 
    if not headers["Host"] then
       headers["Host"] = wrk.headers["Host"]
@@ -68,7 +73,7 @@ function wrk.format(method, path, headers, body)
    s[#s+1] = ""
    s[#s+1] = body or ""
 
-   return table.concat(s, "\r\n")
+   return host, table.concat(s, "\r\n")
 end
 
 return wrk

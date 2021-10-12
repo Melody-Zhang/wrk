@@ -45,6 +45,12 @@ static const struct luaL_Reg threadlib[] = {
     { NULL,         NULL                   }
 };
 
+void script_addr_copy(struct addrinfo *src, struct addrinfo *dst) {
+    *dst = *src;
+    dst->ai_addr = zmalloc(src->ai_addrlen);
+    memcpy(dst->ai_addr, src->ai_addr, src->ai_addrlen);
+}
+
 lua_State *script_create(char *file, char *url, char **headers) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
@@ -149,7 +155,7 @@ uint64_t script_delay(lua_State *L) {
     return delay;
 }
 
-void script_request(lua_State *L, char **buf, size_t *len) {
+void script_request(lua_State *L, struct addrinfo *addr, char **buf, size_t *len) {
     int pop = 1;
     lua_getglobal(L, "request");
     if (!lua_isfunction(L, -1)) {
@@ -157,10 +163,29 @@ void script_request(lua_State *L, char **buf, size_t *len) {
         lua_getfield(L, -1, "request");
         pop += 2;
     }
-    lua_call(L, 0, 1);
+    lua_call(L, 0, 2);
     const char *str = lua_tolstring(L, -1, len);
+    size_t len2 = 0;
+    const char *host = lua_tolstring(L, -2, len2);
     *buf = realloc(*buf, *len);
     memcpy(*buf, str, *len);
+    if (addr == NULL) {
+        lua_pop(L, pop);
+        return;
+    }
+    const char *service = "http";
+    struct addrinfo *addrsrc;
+    struct addrinfo hints = {
+        .ai_family   = AF_UNSPEC,
+        .ai_socktype = SOCK_STREAM
+    };
+    int rc, index = 1;
+    if ((rc = getaddrinfo(host, service, &hints, &addrsrc)) != 0) {
+        const char *msg = gai_strerror(rc);
+        fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
+        exit(1);
+    }
+    script_addr_copy(addrsrc, addr);
     lua_pop(L, pop);
 }
 
@@ -265,7 +290,7 @@ static int verify_request(http_parser *parser) {
     return 0;
 }
 
-size_t script_verify_request(lua_State *L) {
+size_t script_verify_request(lua_State *L, struct addrinfo *addr) {
     http_parser_settings settings = {
         .on_message_complete = verify_request
     };
@@ -273,7 +298,7 @@ size_t script_verify_request(lua_State *L) {
     char *request = NULL;
     size_t len, count = 0;
 
-    script_request(L, &request, &len);
+    script_request(L, addr, &request, &len);
     http_parser_init(&parser, HTTP_REQUEST);
     parser.data = &count;
 
@@ -304,12 +329,6 @@ static struct addrinfo *checkaddr(lua_State *L) {
     struct addrinfo *addr = luaL_checkudata(L, -1, "wrk.addr");
     luaL_argcheck(L, addr != NULL, 1, "`addr' expected");
     return addr;
-}
-
-void script_addr_copy(struct addrinfo *src, struct addrinfo *dst) {
-    *dst = *src;
-    dst->ai_addr = zmalloc(src->ai_addrlen);
-    memcpy(dst->ai_addr, src->ai_addr, src->ai_addrlen);
 }
 
 struct addrinfo *script_addr_clone(lua_State *L, struct addrinfo *addr) {
