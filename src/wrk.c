@@ -365,7 +365,7 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     char host[NI_MAXHOST];
     char service[NI_MAXSERV];
 
-    flags = NI_NUMERICHOST | NI_NUMERICSERV;
+    int flags = NI_NUMERICHOST | NI_NUMERICSERV;
     int rc = getnameinfo(addr->ai_addr, addr->ai_addrlen, host, NI_MAXHOST, service, NI_MAXSERV, flags);
     if (rc != 0) {
         const char *msg = gai_strerror(rc);
