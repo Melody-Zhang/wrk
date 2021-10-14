@@ -173,7 +173,7 @@ void script_request(lua_State *L, struct addrinfo *addr, char **buf, size_t *len
         lua_pop(L, pop);
         return;
     }
-    const char *service = "http";
+    const char *service = "https";
     struct addrinfo *addrsrc;
     struct addrinfo hints = {
         .ai_family   = AF_UNSPEC,
