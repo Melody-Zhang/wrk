@@ -128,7 +128,12 @@ void script_init(lua_State *L, thread *t, int argc, char **argv) {
     lua_getglobal(L, "wrk");
     lua_getfield(L, -1, "setup");
     script_push_thread(L, t);
-    lua_call(L, 1, 0);
+    lua_newtable(L);
+    for (int i = 0; i < argc; i++) {
+        lua_pushstring(t->L, argv[i]);
+        lua_rawseti(t->L, -2, i);
+    }
+    lua_call(L, 2, 0);
     lua_pop(L, 1);
 
     lua_getfield(t->L, -1, "init");

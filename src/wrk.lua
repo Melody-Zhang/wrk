@@ -19,10 +19,10 @@ function wrk.resolve(host, service)
    wrk.addrs = addrs
 end
 
-function wrk.setup(thread)
+function wrk.setup(thread, args)
    thread.addr = wrk.addrs[1]
    if type(setup) == "function" then
-      setup(thread)
+      setup(thread, args)
    end
 end
 
