@@ -127,15 +127,17 @@ void script_init(lua_State *L, thread *t, int argc, char **argv) {
 
     lua_getglobal(L, "wrk");
     lua_getfield(L, -1, "setup");
+    printf("before setup: stack hight = %d\n", lua_gettop(L));
     script_push_thread(L, t);
+    printf("after setup: stack hight = %d\n", lua_gettop(L));
     lua_newtable(L);
     for (int i = 0; i < argc; i++) {
-        lua_pushstring(t->L, argv[i]);
-        lua_rawseti(t->L, -2, i);
+        lua_pushstring(L, argv[i]);
+        lua_rawseti(L, -2, i);
     }
     lua_call(L, 2, 0);
     lua_pop(L, 1);
-
+    printf("before init: stack hight = %d\n", lua_gettop(L));
     lua_getfield(t->L, -1, "init");
     lua_newtable(t->L);
     for (int i = 0; i < argc; i++) {
