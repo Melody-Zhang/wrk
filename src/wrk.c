@@ -13,6 +13,7 @@ static struct config {
     bool     delay;
     bool     dynamic;
     bool     latency;
+    bool     sla;
     char    *host;
     char    *script;
     SSL_CTX *ctx;
@@ -49,6 +50,7 @@ static void usage() {
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
            "    -s, --script      <S>  Load Lua script file       \n"
+           "    -l, --sla              Turn on the circuit breaker\n"
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
@@ -142,14 +144,58 @@ int main(int argc, char **argv) {
     uint64_t complete = 0;
     uint64_t bytes    = 0;
     errors errors     = { 0 };
+    if (cfg.sla) {
+        uint64_t increm_complete = 0;
+        uint64_t gross_complete = 0;
+        uint32_t increm_errors = 0;
+        uint32_t gross_errors = 0;
+        long double error_rate = 0;
+        uint64_t step = 5;
+        int count = 0;
+        for(; step<=cfg.duration; step+=5){
+            complete = 0;
+            memset(&errors, 0, sizeof(errors));
+            sleep(5);
+            count++;
+            for (uint64_t i = 0; i < cfg.threads; i++) {
+                thread *t = &threads[i];
+                complete += t->complete;
+                errors.status  += t->errors.status;
+            }
+            increm_complete = complete - gross_complete;
+            increm_errors = errors.status - gross_errors;
+            gross_complete = complete;
+            gross_errors = errors.status;
 
-    sleep(cfg.duration);
+            uint64_t runtime_us = time_us() - start;
+            long double runtime_s   = runtime_us / 1000000.0;
+            long double incr_req_per_s = increm_complete / 5.000;
+
+            if (complete / cfg.connections > 0) {
+                int64_t interval = runtime_us / (complete / cfg.connections);
+                stats_correct(statistics.latency, interval);
+            }
+
+            long double mean = stats_mean(statistics.latency);
+
+            error_rate = ((uint64_t)increm_errors/(increm_complete*1.0))*100;
+
+            printf("seq=%d: %.2Lf, %.2Lf, %.2Lf\n", count, incr_req_per_s, mean/1000, error_rate);
+        }
+        sleep(cfg.duration-step+5);
+    }else{
+        sleep(cfg.duration);
+    }
+
     stop = 1;
+    complete = 0;
+    bytes    = 0;
+    memset(&errors, 0, sizeof(errors));
+    printf("end to summary ...\n");
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
         pthread_join(t->thread, NULL);
-
         complete += t->complete;
         bytes    += t->bytes;
 
@@ -471,6 +517,7 @@ static struct option longopts[] = {
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
     { "script",      required_argument, NULL, 's' },
+    { "sla",         no_argument,       NULL, 'l' },
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
@@ -489,7 +536,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:lLrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -502,6 +549,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 's':
                 cfg->script = optarg;
+                break;
+            case 'l':
+                cfg->sla = true;
                 break;
             case 'H':
                 *header++ = optarg;
