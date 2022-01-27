@@ -180,7 +180,7 @@ int main(int argc, char **argv) {
 
             error_rate = ((uint64_t)increm_errors/(increm_complete*1.0))*100;
 
-            printf("seq=%d: %.2Lf, %.2Lf, %.2Lf\n", count, incr_req_per_s, mean/1000, error_rate);
+            printf("seq=%d: %.2LfRequests/sec, %.2Lfms, %.2Lf%\n", count, incr_req_per_s, mean/1000, error_rate);
         }
         sleep(cfg.duration-step+5);
     }else{
@@ -191,7 +191,6 @@ int main(int argc, char **argv) {
     complete = 0;
     bytes    = 0;
     memset(&errors, 0, sizeof(errors));
-    printf("end to summary ...\n");
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
